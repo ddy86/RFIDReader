@@ -92,20 +92,23 @@ namespace RFIDreader
                     LogHelper.Log(LogLevel.Debug, "lapsed data, removed." + JsonConvert.SerializeObject(data));
                     continue;
                 }
-                int index = datas.IndexOf(data);
-                if (datas.Count == index + 1)
+                if (i + 1 == count)
                 {
                     continue;
                 }
-                TAGDATA next = datas[index + 1];
-                if(next.readerID == data.readerID){
-                    datas.Remove(data);
+                TAGDATA next = datas[i + 1];
+                if(data.readerID == next.readerID){
+                    datas.RemoveAt(i);
                     LogHelper.Log(LogLevel.Debug, "replicate data, removed." + JsonConvert.SerializeObject(data));
                     i--;count--;
                 }
                 else
                 {//  use next readerId as the in out type: 1 or 2
                     recordsList.Add(new { next.tagID, next.time, next.readerID });
+                    datas.RemoveAt(i);
+                    datas.RemoveAt(i + 1);
+                    i -= 2;
+                    count -= 2;
                     LogHelper.Log(LogLevel.Debug, "access data, save to db." + JsonConvert.SerializeObject(next));
                 }
             }
