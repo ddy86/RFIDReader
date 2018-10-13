@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -22,7 +22,7 @@ namespace RFIDreader
         public static readonly string port = ConfigurationManager.AppSettings.Get("RFIDReader_port");
         TcpReader_5 m_rfidReader = new TcpReader_5();
 
-        Dictionary<string,List<TAGDATA>> dictionary = new Dictionary<string, List<TAGDATA>>();
+        Dictionary<string, List<TAGDATA>> dictionary = new Dictionary<string, List<TAGDATA>>();
         ArrayList recordsList = new ArrayList();
         public RFIDService()
         {
@@ -34,14 +34,21 @@ namespace RFIDreader
             timer.Elapsed += new System.Timers.ElapsedEventHandler(TimedEvent);
             timer.Interval = 2000;// 5
             timer.Enabled = true;
-            
+
         }
 
         private void TimedEvent(object sender, System.Timers.ElapsedEventArgs e)
         {
             List<TAGDATA> listTag = m_rfidReader.GetTagData();
+            if (listTag.Count == 0)
+            {
+                return;
+            }
+
             LogHelper.Log(LogLevel.Debug, "dictionary's count: " + dictionary.Count + ", get data size: " + listTag.Count);
-            foreach (TAGDATA tag in listTag){
+
+            foreach (TAGDATA tag in listTag)
+            {
                 string id = tag.tagID.ToString();
                 if (!dictionary.ContainsKey(id))
                 {
@@ -49,11 +56,9 @@ namespace RFIDreader
                 }
                 List<TAGDATA> al = dictionary[id];
                 al.Add(tag);
-
-                //list.Add(new {tag.tagID, tag.time, tag.readerID, tag.strReaderIP, tag.type, tag.value1, tag.value2,  tag.bVoltLow});
             }
-           
-            foreach(string key in dictionary.Keys)
+
+            foreach (string key in dictionary.Keys)
             {
                 List<TAGDATA> datas = dictionary[key];
                 /*new Thread(new ThreadStart(()=> {
@@ -61,9 +66,12 @@ namespace RFIDreader
                 })).Start();*/
                 handleData(datas);
             }
+
             if (recordsList.Count > 0)
             {
+                LogHelper.Log(LogLevel.Debug, "To save data: " + JsonConvert.SerializeObject(recordsList));
                 int result = SaveRecords(recordsList);
+
                 if (result > 0)
                 {
                     recordsList.Clear();
@@ -73,43 +81,42 @@ namespace RFIDreader
                     LogHelper.Log(LogLevel.Debug, "error! save data failed. " + JsonConvert.SerializeObject(recordsList));
                 }
             }
-            //LogHelper.Log(LogLevel.Debug, JsonConvert.SerializeObject(list));
         }
 
         public void handleData(List<TAGDATA> datas)
         {
             LogHelper.Log(LogLevel.Debug, "handle data: " + JsonConvert.SerializeObject(datas));
             int count = datas.Count;
-            for(int i=0; i<count;i++)
+            for (int i = 0; i < count; i++)
             {
                 TAGDATA data = datas[i];
-                DateTime dateTime =  data.time;
+                DateTime dateTime = data.time;
                 long seconds = (long)(DateTime.Now - dateTime).TotalSeconds;
                 if (seconds > 300) // 5 minutes
                 {
                     datas.Remove(data);
-                    i--;count--;
+                    i--; count--;
                     LogHelper.Log(LogLevel.Debug, "lapsed data, removed." + JsonConvert.SerializeObject(data));
                     continue;
                 }
-                if (i + 1 == count)
+                if (datas.Count == i + 1)
                 {
                     continue;
                 }
                 TAGDATA next = datas[i + 1];
-                if(data.readerID == next.readerID){
-                    datas.RemoveAt(i);
+                if (next.readerID == data.readerID)
+                {
+                    datas.Remove(data);
                     LogHelper.Log(LogLevel.Debug, "replicate data, removed." + JsonConvert.SerializeObject(data));
-                    i--;count--;
+                    i--; count--;
                 }
                 else
                 {//  use next readerId as the in out type: 1 or 2
                     recordsList.Add(new { next.tagID, next.time, next.readerID });
-                    datas.RemoveAt(i);
-                    datas.RemoveAt(i + 1);
-                    i -= 2;
-                    count -= 2;
+                    datas.Remove(data);
+                    datas.Remove(next);
                     LogHelper.Log(LogLevel.Debug, "access data, save to db." + JsonConvert.SerializeObject(next));
+                    break;
                 }
             }
         }
@@ -117,35 +124,11 @@ namespace RFIDreader
         public int SaveRecords(ArrayList list)
         {
             #region   插入单条数据
-            
-            string sql = @"into test.record(cardId, time, type)values (@cardId, @time, @type)";
+
+            string sql = @"insert into test.record(cardId, time, type) values (@tagID, @time, @readerID)";
             var result = DapperDBContext.Execute(sql, list); //直接传送list对象
             return result;
             #endregion
-        }
-
-        List<uint> dataList = new List<uint>();
-
-        int FindTag(TAGDATA tag)
-        {
-            for (int i = 0; i < dataList.Count; i++)
-            {
-                if (tag.tagID == dataList[i])
-                    return i;
-            }
-            dataList.Add(tag.tagID);
-
-            return -1;
-        }
-
-
-        public void Write2db(TAGDATA tag , String strType)
-        { 
-            String sql = "insert into test.rfid_data (tagId, time, readerId, readerIp, type, value1, value2) values (@tagId, @time, @readerId, @readerIp, @type, @value1, @value2)";
-
-            MysqlManager<RfidData>.Execute(sql, new { tagId=tag.tagID, time=tag.time, readerId=tag.readerID,readerIp=tag.strReaderIP , type=tag.type, value1=tag.value1, value2=tag.value2 });
-
-           
         }
 
         protected override void OnStart(string[] args)
