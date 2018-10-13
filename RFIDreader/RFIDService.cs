@@ -64,6 +64,10 @@ namespace RFIDreader
                 /*new Thread(new ThreadStart(()=> {
                     handleData(datas);
                 })).Start();*/
+                if (datas.Count == 0)
+                {
+                    continue;
+                }
                 handleData(datas);
             }
 
@@ -125,7 +129,7 @@ namespace RFIDreader
         {
             #region   插入单条数据
 
-            string sql = @"insert into test.record(cardId, time, type) values (@tagID, @time, @readerID)";
+            string sql = @"insert into sio_rfid_record(cardId, time, type) values (@tagID, @time, @readerID)";
             var result = DapperDBContext.Execute(sql, list); //直接传送list对象
             return result;
             #endregion
